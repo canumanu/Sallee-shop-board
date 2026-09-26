@@ -242,7 +242,10 @@ async function load() {
     const res = await fetch(`${DATA_URL}?t=${Date.now()}`, { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    const jobs = (Array.isArray(data) ? data : data.jobs || []).filter(j => j && (j.unit || j.job));
+    const raw = Array.isArray(data) ? data : (data.jobs || data.value || []);
+    // Accept rows straight from Excel "List rows" (UNIT, JOB, ...) — lowercase the keys
+    const jobs = raw.map(r => Object.fromEntries(Object.entries(r || {}).map(([k, v]) => [k.trim().toLowerCase(), v ?? ''])))
+                    .filter(j => j.unit || j.job);
     const t = today();
 
     const groups = { safety: [], ongoing: [], upcoming: [] };
