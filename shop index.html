@@ -40,7 +40,7 @@
     padding: 1.2vh 1vw; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center;
   }
   .col h2 .count { background: var(--card); color: var(--muted); border-radius: 999px; padding: .2vh .9vw; font-size: 2.2vh; }
-  .col.routine h2 { color: var(--green); }
+  .col.safety h2 { color: var(--green); }
   .col.ongoing h2 { color: var(--blue); }
   .col.upcoming h2 { color: var(--accent); }
   .list { flex: 1; overflow: hidden; padding: 1vh .8vw; display: flex; flex-direction: column; gap: 1vh; }
@@ -83,7 +83,7 @@
 </header>
 
 <main>
-  <section class="col routine"><h2>ROUTINE <span class="count" id="c-routine">0</span></h2><div class="list" id="l-routine"></div></section>
+  <section class="col safety"><h2>SAFETY INSPECTIONS <span class="count" id="c-safety">0</span></h2><div class="list" id="l-safety"></div></section>
   <section class="col ongoing"><h2>IN THE SHOP <span class="count" id="c-ongoing">0</span></h2><div class="list" id="l-ongoing"></div></section>
   <section class="col upcoming"><h2>SCHEDULED <span class="count" id="c-upcoming">0</span></h2><div class="list" id="l-upcoming"></div></section>
 </main>
@@ -116,7 +116,7 @@ function fmtDay(d) { return d ? d.toLocaleDateString('en-US', { weekday: 'short'
 
 function kind(job) {
   const t = up(job.type);
-  if (t.startsWith('ROUT')) return 'routine';
+  if (t.startsWith('SAFE') || t.startsWith('INSP')) return 'safety';
   if (t.startsWith('ONG') || t.includes('PROGRESS') || t === 'ACTIVE') return 'ongoing';
   return 'upcoming';
 }
@@ -154,7 +154,7 @@ function dueChip(due, t) {
   return null;
 }
 
-function renderRoutine(jobs, t) {
+function renderSafety(jobs, t) {
   return jobs
     .sort((a, b) => (parseDay(a.due) || 8.64e15) - (parseDay(b.due) || 8.64e15))
     .map(j => {
@@ -245,10 +245,10 @@ async function load() {
     const jobs = (Array.isArray(data) ? data : data.jobs || []).filter(j => j && (j.unit || j.job));
     const t = today();
 
-    const groups = { routine: [], ongoing: [], upcoming: [] };
+    const groups = { safety: [], ongoing: [], upcoming: [] };
     jobs.forEach(j => groups[kind(j)].push(j));
 
-    fill('routine', renderRoutine(groups.routine, t), groups.routine.length);
+    fill('safety', renderSafety(groups.safety, t), groups.safety.filter(j => !isDone(j)).length);
     const ongoingHtml = renderOngoing(groups.ongoing, t);
     fill('ongoing', ongoingHtml, groups.ongoing.filter(j => !isDone(j)).length);
     const upHtml = renderUpcoming(groups.upcoming, t);
