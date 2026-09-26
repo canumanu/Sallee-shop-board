@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sallee Shop Board</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #151b23;
+    --card: #1c2430;
+    --line: #2a3441;
+    --text: #e8edf3;
+    --muted: #8b98a8;
+    --accent: #f2b233;
+    --blue: #3b8eea;
+    --green: #2fb86b;
+    --amber: #f2a33a;
+    --red: #e5484d;
+    --gray: #6b7785;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: 'Barlow', sans-serif; overflow: hidden; }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1.2vh 2vw; border-bottom: 3px solid var(--accent); height: 10vh;
+  }
+  .brand { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 4.6vh; letter-spacing: .06em; }
+  .brand span { color: var(--accent); }
+  .clock { text-align: right; font-family: 'Barlow Condensed', sans-serif; }
+  .clock .time { font-size: 4.4vh; font-weight: 600; line-height: 1; }
+  .clock .date { font-size: 2.1vh; color: var(--muted); letter-spacing: .05em; }
+
+  main { display: grid; grid-template-columns: 1fr 1.25fr 1fr; gap: 1.2vw; padding: 1.5vh 1.5vw; height: 84vh; }
+  .col { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; display: flex; flex-direction: column; min-height: 0; }
+  .col h2 {
+    font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 3.2vh; letter-spacing: .08em;
+    padding: 1.2vh 1vw; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center;
+  }
+  .col h2 .count { background: var(--card); color: var(--muted); border-radius: 999px; padding: .2vh .9vw; font-size: 2.2vh; }
+  .col.routine h2 { color: var(--green); }
+  .col.ongoing h2 { color: var(--blue); }
+  .col.upcoming h2 { color: var(--accent); }
+  .list { flex: 1; overflow: hidden; padding: 1vh .8vw; display: flex; flex-direction: column; gap: 1vh; }
+
+  .card { background: var(--card); border-radius: 8px; padding: 1.2vh 1vw; border-left: 6px solid var(--gray); }
+  .card.s-blue { border-left-color: var(--blue); }
+  .card.s-green { border-left-color: var(--green); }
+  .card.s-amber { border-left-color: var(--amber); }
+  .card.s-red { border-left-color: var(--red); }
+  .card .top { display: flex; justify-content: space-between; align-items: baseline; gap: .8vw; }
+  .unit { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 3.1vh; letter-spacing: .03em; }
+  .job { font-size: 2.3vh; font-weight: 500; margin-top: .3vh; }
+  .meta { display: flex; flex-wrap: wrap; gap: .4vh 1.2vw; margin-top: .7vh; font-size: 1.85vh; color: var(--muted); }
+  .meta b { color: var(--text); font-weight: 600; }
+  .notes { margin-top: .6vh; font-size: 1.8vh; color: var(--muted); font-style: italic; }
+  .chip {
+    font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 1.9vh; letter-spacing: .05em;
+    padding: .25vh .7vw; border-radius: 5px; white-space: nowrap; background: var(--gray); color: #fff;
+  }
+  .chip.blue { background: var(--blue); } .chip.green { background: var(--green); }
+  .chip.amber { background: var(--amber); color: #1a1a1a; } .chip.red { background: var(--red); }
+  .card.done { opacity: .55; }
+  .meta .out { color: #c9a6ff; font-weight: 600; letter-spacing: .03em; }
+  .empty { color: var(--muted); font-size: 2.2vh; text-align: center; margin-top: 4vh; }
+
+  .daygroup { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 2.1vh; color: var(--accent); letter-spacing: .08em; margin-top: .6vh; }
+  .daygroup:first-child { margin-top: 0; }
+
+  footer {
+    height: 6vh; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 2vw; font-size: 1.8vh; color: var(--muted); border-top: 1px solid var(--line);
+  }
+  footer .stale { color: var(--red); font-weight: 600; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">SALLEE <span>SHOP</span> BOARD</div>
+  <div class="clock"><div class="time" id="time">--:--</div><div class="date" id="date"></div></div>
+</header>
+
+<main>
+  <section class="col routine"><h2>ROUTINE <span class="count" id="c-routine">0</span></h2><div class="list" id="l-routine"></div></section>
+  <section class="col ongoing"><h2>IN THE SHOP <span class="count" id="c-ongoing">0</span></h2><div class="list" id="l-ongoing"></div></section>
+  <section class="col upcoming"><h2>SCHEDULED <span class="count" id="c-upcoming">0</span></h2><div class="list" id="l-upcoming"></div></section>
+</main>
+
+<footer>
+  <div id="updated">Loading…</div>
+  <div>Refreshes every minute</div>
+</footer>
+
+<script>
+const DATA_URL = 'data/shop.json';
+const REFRESH_MS = 60 * 1000;
+const STALE_MIN = 45;            // flag if the flow hasn't written in this many minutes
+const UPCOMING_DAYS = 30;        // how far ahead the Scheduled column looks
+
+// ---------- helpers ----------
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const up = s => String(s ?? '').trim().toUpperCase();
+
+// Parse "yyyy-MM-dd" as a LOCAL date (date-only, no time-of-day/timezone drift)
+function parseDay(s) {
+  if (!s) return null;
+  const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  return new Date(+m[1], +m[2] - 1, +m[3]);
+}
+function today() { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+function dayDiff(a, b) { return Math.round((a - b) / 86400000); }
+function fmtDay(d) { return d ? d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : ''; }
+
+function kind(job) {
+  const t = up(job.type);
+  if (t.startsWith('ROUT')) return 'routine';
+  if (t.startsWith('ONG') || t.includes('PROGRESS') || t === 'ACTIVE') return 'ongoing';
+  return 'upcoming';
+}
+
+// status → color
+function statusColor(status) {
+  const s = up(status);
+  if (!s) return 'gray';
+  if (/DONE|COMPLETE|CLOSED/.test(s)) return 'green';
+  if (/PART|WAIT|HOLD|VENDOR/.test(s)) return 'amber';
+  if (/PROGRESS|WORKING|STARTED|ACTIVE/.test(s)) return 'blue';
+  return 'gray';
+}
+const isDone = j => statusColor(j.status) === 'green';
+
+// ---------- card builders ----------
+function card({ unit, job, chip, chipColor, stripe, meta = [], notes, done }) {
+  return `<div class="card s-${stripe}${done ? ' done' : ''}">
+    <div class="top"><div class="unit">${esc(unit || '—')}</div>${chip ? `<span class="chip ${chipColor}">${esc(chip)}</span>` : ''}</div>
+    <div class="job">${esc(job)}</div>
+    ${meta.length ? `<div class="meta">${meta.join('')}</div>` : ''}
+    ${notes ? `<div class="notes">${esc(notes)}</div>` : ''}
+  </div>`;
+}
+const m = (label, val) => val ? `<span>${label} <b>${esc(val)}</b></span>` : '';
+// Location: only shown when the job is NOT in house (e.g. "Cummins", "Outside - dealer")
+const loc = j => { const l = String(j.location ?? '').trim(); return l && !/^(IN ?HOUSE|SHOP)$/i.test(l) ? `<span class="out">OUT @ ${esc(l)}</span>` : ''; };
+
+function dueChip(due, t) {
+  if (!due) return null;
+  const d = dayDiff(due, t);
+  if (d < 0) return { text: `OVERDUE ${-d}D`, color: 'red' };
+  if (d === 0) return { text: 'DUE TODAY', color: 'amber' };
+  if (d === 1) return { text: 'DUE TOMORROW', color: 'amber' };
+  return null;
+}
+
+function renderRoutine(jobs, t) {
+  return jobs
+    .sort((a, b) => (parseDay(a.due) || 8.64e15) - (parseDay(b.due) || 8.64e15))
+    .map(j => {
+      const due = parseDay(j.due);
+      const dc = !isDone(j) && dueChip(due, t);
+      const color = dc ? dc.color : statusColor(j.status);
+      return card({
+        unit: j.unit, job: j.job, done: isDone(j),
+        chip: dc ? dc.text : (j.status ? up(j.status) : up(j.frequency)),
+        chipColor: color, stripe: color === 'gray' ? 'green' : color,
+        meta: [m('Every', j.frequency && j.frequency.toLowerCase()), m('Next', due && fmtDay(due)), m('Tech', j.mechanic), loc(j)],
+        notes: j.notes
+      });
+    }).join('');
+}
+
+function renderOngoing(jobs, t) {
+  const rank = j => ({ red: 0, amber: 1, blue: 2, gray: 3, green: 4 }[j._color]);
+  return jobs
+    .filter(j => !isDone(j) || (parseDay(j.completed) && dayDiff(parseDay(j.completed), t) === 0))
+    .map(j => {
+      const due = parseDay(j.due), start = parseDay(j.start);
+      const dc = !isDone(j) && dueChip(due, t);
+      j._color = dc && dc.color === 'red' ? 'red' : statusColor(j.status);
+      j._dc = dc;
+      j._days = start ? dayDiff(t, start) : null;
+      return j;
+    })
+    .sort((a, b) => rank(a) - rank(b) || (b._days ?? 0) - (a._days ?? 0))
+    .map(j => card({
+      unit: j.unit, job: j.job, done: isDone(j),
+      chip: j._dc && !isDone(j) ? j._dc.text : up(j.status || 'IN SHOP'),
+      chipColor: j._dc && !isDone(j) ? j._dc.color : j._color,
+      stripe: j._color,
+      meta: [
+        m('Tech', j.mechanic),
+        j._days != null ? `<span>In shop <b>${j._days === 0 ? 'today' : j._days + (j._days === 1 ? ' day' : ' days')}</b></span>` : '',
+        m('Due', parseDay(j.due) && fmtDay(parseDay(j.due))),
+        loc(j)
+      ],
+      notes: j.notes
+    })).join('');
+}
+
+function renderUpcoming(jobs, t) {
+  const horizon = new Date(t); horizon.setDate(horizon.getDate() + UPCOMING_DAYS);
+  const list = jobs
+    .filter(j => !isDone(j))
+    .map(j => ({ ...j, _d: parseDay(j.start) || parseDay(j.due) }))
+    .filter(j => !j._d || j._d <= horizon)
+    .sort((a, b) => (a._d || 8.64e15) - (b._d || 8.64e15));
+
+  let html = '', lastKey = null;
+  for (const j of list) {
+    let key;
+    if (!j._d) key = 'UNSCHEDULED';
+    else {
+      const d = dayDiff(j._d, t);
+      key = d < 0 ? 'PAST DUE' : d === 0 ? 'TODAY' : d === 1 ? 'TOMORROW' : fmtDay(j._d).toUpperCase();
+    }
+    if (key !== lastKey) { html += `<div class="daygroup">${key}</div>`; lastKey = key; }
+    const late = j._d && dayDiff(j._d, t) < 0;
+    const color = late ? 'red' : (j._d && dayDiff(j._d, t) <= 1 ? 'amber' : 'gray');
+    html += card({
+      unit: j.unit, job: j.job,
+      chip: j.priority ? up(j.priority) : null,
+      chipColor: /HIGH|URGENT/.test(up(j.priority)) ? 'red' : 'gray',
+      stripe: color,
+      meta: [m('Tech', j.mechanic), loc(j)],
+      notes: j.notes
+    });
+  }
+  return html;
+}
+
+// ---------- load + render ----------
+function fill(id, html, count) {
+  document.getElementById('l-' + id).innerHTML = html || '<div class="empty">Nothing here</div>';
+  document.getElementById('c-' + id).textContent = count;
+  resetScroll(id);
+}
+
+async function load() {
+  try {
+    const res = await fetch(`${DATA_URL}?t=${Date.now()}`, { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const jobs = (Array.isArray(data) ? data : data.jobs || []).filter(j => j && (j.unit || j.job));
+    const t = today();
+
+    const groups = { routine: [], ongoing: [], upcoming: [] };
+    jobs.forEach(j => groups[kind(j)].push(j));
+
+    fill('routine', renderRoutine(groups.routine, t), groups.routine.length);
+    const ongoingHtml = renderOngoing(groups.ongoing, t);
+    fill('ongoing', ongoingHtml, groups.ongoing.filter(j => !isDone(j)).length);
+    const upHtml = renderUpcoming(groups.upcoming, t);
+    fill('upcoming', upHtml, (upHtml.match(/class="card/g) || []).length);
+
+    const upd = data.updated ? new Date(data.updated) : null;
+    const el = document.getElementById('updated');
+    if (upd && !isNaN(upd)) {
+      const mins = Math.round((Date.now() - upd) / 60000);
+      const txt = `Last updated ${upd.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
+      el.innerHTML = mins > STALE_MIN ? `<span class="stale">⚠ ${txt} — data may be out of date</span>` : txt;
+    } else el.textContent = 'Loaded';
+  } catch (e) {
+    document.getElementById('updated').innerHTML = `<span class="stale">⚠ Can't load shop data (${esc(e.message)}) — showing last good copy</span>`;
+  }
+}
+
+// ---------- slow auto-scroll for long columns ----------
+const scrollers = {};
+function resetScroll(id) {
+  const el = document.getElementById('l-' + id);
+  el.scrollTop = 0;
+  scrollers[id] = { el, pause: 120, dir: 1 };
+}
+setInterval(() => {
+  for (const s of Object.values(scrollers)) {
+    const max = s.el.scrollHeight - s.el.clientHeight;
+    if (max <= 2) continue;
+    if (s.pause > 0) { s.pause--; continue; }
+    s.el.scrollTop += s.dir;
+    if (s.el.scrollTop >= max) { s.dir = 0; s.pause = 150; s.back = true; }
+    if (s.back && s.pause === 0) { s.el.scrollTop = 0; s.back = false; s.dir = 1; s.pause = 150; }
+  }
+}, 40);
+
+// ---------- clock ----------
+function tick() {
+  const n = new Date();
+  document.getElementById('time').textContent = n.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  document.getElementById('date').textContent = n.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).toUpperCase();
+}
+tick(); setInterval(tick, 1000 * 15);
+load(); setInterval(load, REFRESH_MS);
+</script>
+</body>
+</html>
