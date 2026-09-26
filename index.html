@@ -43,7 +43,10 @@
   .col.safety h2 { color: var(--green); }
   .col.ongoing h2 { color: var(--blue); }
   .col.upcoming h2 { color: var(--accent); }
-  .list { flex: 1; overflow: hidden; padding: 1vh .8vw; display: flex; flex-direction: column; gap: 1vh; }
+  .list { flex: 1; overflow: hidden; padding: 1vh .8vw 0; min-height: 0; }
+  .reel { will-change: transform; }
+  .track { display: flex; flex-direction: column; gap: 1vh; padding-bottom: 1vh; }
+  .track.loop { padding-bottom: 4vh; }  /* breathing room between the end of the list and its repeat */
 
   .card { background: var(--card); border-radius: 8px; padding: 1.2vh 1vw; border-left: 6px solid var(--gray); }
   .card.s-blue { border-left-color: var(--blue); }
@@ -116,7 +119,7 @@ function fmtDay(d) { return d ? d.toLocaleDateString('en-US', { weekday: 'short'
 
 function kind(job) {
   const t = up(job.type);
-  if (t.startsWith('SAFE') || t.startsWith('INSP')) return 'safety';
+  if (t.startsWith('SAFE') || t.startsWith('INSP') || t.startsWith('ROUT')) return 'safety';  // ROUTINE counts as a safety inspection
   if (t.startsWith('ONG') || t.includes('PROGRESS') || t === 'ACTIVE') return 'ongoing';
   return 'upcoming';
 }
@@ -232,9 +235,13 @@ function renderUpcoming(jobs, t) {
 
 // ---------- load + render ----------
 function fill(id, html, count) {
-  document.getElementById('l-' + id).innerHTML = html || '<div class="empty">Nothing here</div>';
   document.getElementById('c-' + id).textContent = count;
-  resetScroll(id);
+  const st = reels[id];
+  if (st && st.html === html) return;          // nothing changed: keep scrolling where we are
+  const list = document.getElementById('l-' + id);
+  list.innerHTML = `<div class="reel"><div class="track">${html || '<div class="empty">Nothing here</div>'}</div></div>`;
+  reels[id] = { html, list, reel: list.firstChild, offset: 0, loopH: 0, pause: START_PAUSE };
+  measure(id);
 }
 
 async function load() {
@@ -269,23 +276,46 @@ async function load() {
   }
 }
 
-// ---------- slow auto-scroll for long columns ----------
-const scrollers = {};
-function resetScroll(id) {
-  const el = document.getElementById('l-' + id);
-  el.scrollTop = 0;
-  scrollers[id] = { el, pause: 120, dir: 1 };
-}
-setInterval(() => {
-  for (const s of Object.values(scrollers)) {
-    const max = s.el.scrollHeight - s.el.clientHeight;
-    if (max <= 2) continue;
-    if (s.pause > 0) { s.pause--; continue; }
-    s.el.scrollTop += s.dir;
-    if (s.el.scrollTop >= max) { s.dir = 0; s.pause = 150; s.back = true; }
-    if (s.back && s.pause === 0) { s.el.scrollTop = 0; s.back = false; s.dir = 1; s.pause = 150; }
+// ---------- continuous auto-scroll (ticker loop) for long columns ----------
+// If a column's cards don't fit, a second copy is placed under the first and the column
+// scrolls up forever; when the copy reaches the top it's swapped back invisibly — no stop, no jump.
+const reels = {};
+const SPEED_VH_PER_SEC = 2.5;   // scroll speed: % of screen height per second (raise to go faster)
+const START_PAUSE = 4;          // seconds to hold at the top after new data arrives
+
+function measure(id) {
+  const st = reels[id]; if (!st) return;
+  const first = st.reel.firstChild;
+  while (st.reel.children.length > 1) st.reel.lastChild.remove();
+  first.classList.remove('loop');
+  const avail = st.list.clientHeight;
+  if (first.offsetHeight > avail + 2) {
+    first.classList.add('loop');
+    const copy = first.cloneNode(true);
+    copy.setAttribute('aria-hidden', 'true');
+    st.reel.appendChild(copy);
+    st.loopH = first.offsetHeight;
+    st.offset %= st.loopH;
+  } else {
+    st.loopH = 0; st.offset = 0;
   }
-}, 40);
+  st.reel.style.transform = `translateY(${-st.offset}px)`;
+}
+window.addEventListener('resize', () => Object.keys(reels).forEach(measure));
+
+let lastT = performance.now();
+function animate(now) {
+  const dt = Math.min((now - lastT) / 1000, 0.1); lastT = now;
+  const speed = window.innerHeight * SPEED_VH_PER_SEC / 100;
+  for (const st of Object.values(reels)) {
+    if (!st.loopH) continue;
+    if (st.pause > 0) { st.pause -= dt; continue; }
+    st.offset = (st.offset + speed * dt) % st.loopH;
+    st.reel.style.transform = `translateY(${-st.offset}px)`;
+  }
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
 
 // ---------- clock ----------
 function tick() {
