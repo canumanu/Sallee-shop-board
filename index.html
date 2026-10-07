@@ -83,6 +83,7 @@
     padding: 0 2vw; font-size: 1.8vh; color: var(--muted); border-top: 1px solid var(--line);
   }
   footer .stale { color: var(--red); font-weight: 600; }
+  footer .busy { color: var(--amber); font-weight: 600; }
   footer .who { display: flex; gap: 1.2vw; align-items: center; }
   footer a { color: var(--muted); text-decoration: underline; cursor: pointer; }
   footer a:hover { color: var(--text); }
@@ -168,6 +169,7 @@
 
 <script src="config.js"></script>
 <script src="msal-browser.min.js"></script>
+<script src="xlsx.mini.min.js"></script>
 <script>
 const DATA_URL = 'data/shop.json';
 const REFRESH_MS = 60 * 1000;
@@ -359,11 +361,14 @@ async function token() {
   catch (e) { throw new NeedsSignIn(e.message); }
 }
 
+class Busy extends Error { constructor(sec) { super('SharePoint is busy'); this.wait = sec; } }
+
 async function graph(path) {
   const res = await fetch(GRAPH + path, { headers: { Authorization: 'Bearer ' + await token() } });
   if (res.status === 401) throw new NeedsSignIn('Session expired');
   if (res.status === 403) throw new Error("this account doesn't have access to the shop file");
   if (res.status === 404) throw new Error('shop file or table not found — check fileUrl and table in config.js');
+  if ([429, 503, 504].includes(res.status)) throw new Busy(+res.headers.get('Retry-After') || 120);
   if (!res.ok) throw new Error('SharePoint error ' + res.status);
   return res.json();
 }
@@ -384,19 +389,45 @@ function toISODay(value, text) {
   return isNaN(d) ? t : `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+// Turn a grid (header row + rows) of raw values + displayed text into jobs
+function gridToJobs(values, text) {
+  const h = values.findIndex(r => r.some(c => String(c).trim().toUpperCase() === 'UNIT'));   // header row
+  if (h < 0) throw new Error('no UNIT column found in shop.xlsx');
+  const cols = values[h].map(c => String(c).trim().toLowerCase());
+  return normalize(values.slice(h + 1).map((row, i) => Object.fromEntries(cols.map((c, j) => {
+    const v = row[j], tx = (text[h + 1 + i] || [])[j];
+    return [c, DATE_COLS.includes(c) ? toISODay(v, tx) : String(tx ?? v ?? '').trim()];
+  }).filter(([c]) => c))));
+}
+
+let lastTag = null, lastJobs = null;
 async function loadLive() {
   if (!fileRef) {
     const item = await graph(`/shares/${shareId(C.fileUrl)}/driveItem?$select=id,name,parentReference`);
     fileRef = { drive: item.parentReference.driveId, id: item.id };
   }
-  const r = await graph(`/drives/${fileRef.drive}/items/${fileRef.id}/workbook/tables/${encodeURIComponent(C.table || 'Table1')}/range?$select=values,text`);
-  const [head = [], ...rows] = r.values || [];
-  const text = r.text || [];
-  const cols = head.map(h => String(h).trim().toLowerCase());
-  return normalize(rows.map((row, i) => Object.fromEntries(cols.map((c, j) => {
-    const v = row[j], tx = (text[i + 1] || [])[j];
-    return [c, DATE_COLS.includes(c) ? toISODay(v, tx) : String(tx ?? v ?? '').trim()];
-  }))));
+  // 1) Quick check: has the file changed since last time? (one light request a minute)
+  const meta = await graph(`/drives/${fileRef.drive}/items/${fileRef.id}?$select=id,eTag,lastModifiedDateTime,@microsoft.graph.downloadUrl`);
+  if (lastJobs && meta.eTag === lastTag) return lastJobs;
+  // 2) Changed: download the file and read it here (avoids Excel Online's busy limits)
+  let jobs;
+  try {
+    const res = await fetch(meta['@microsoft.graph.downloadUrl'], { cache: 'no-store' });
+    if (!res.ok) throw new Error('download ' + res.status);
+    const wb = XLSX.read(new Uint8Array(await res.arrayBuffer()), { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames.find(n => {
+      const r = XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: '' }).slice(0, 10);
+      return r.some(row => row.some(c => String(c).trim().toUpperCase() === 'UNIT'));
+    }) || wb.SheetNames[0]];
+    jobs = gridToJobs(XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' }),
+                      XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' }));
+  } catch (e) {
+    // Fallback: ask Excel Online for the table
+    const r = await graph(`/drives/${fileRef.drive}/items/${fileRef.id}/workbook/tables/${encodeURIComponent(C.table || 'Table1')}/range?$select=values,text`);
+    jobs = gridToJobs(r.values || [], r.text || []);
+  }
+  lastTag = meta.eTag; lastJobs = jobs;
+  return jobs;
 }
 
 async function loadDemo() {
@@ -408,8 +439,10 @@ async function loadDemo() {
 
 const fmtTime = d => d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
+let pauseUntil = 0;
 async function load() {
   const el = document.getElementById('updated');
+  if (Date.now() < pauseUntil) return;
   try {
     if (LIVE) {
       render(await loadLive());
@@ -426,6 +459,11 @@ async function load() {
     hideNotice();
   } catch (e) {
     if (e instanceof NeedsSignIn) { stopPolling(); return showSignIn('Your sign-in has expired. Please sign in again.'); }
+    if (e instanceof Busy) {                       // SharePoint asked us to slow down: keep the board, try again later
+      pauseUntil = Date.now() + e.wait * 1000;
+      el.innerHTML = `<span class="busy">SharePoint is busy — retrying in ${Math.ceil(e.wait / 60)} min${lastGood ? ` · last update ${fmtTime(lastGood)}` : ''}</span>`;
+      return;
+    }
     const since = lastGood ? ` · last good update ${fmtTime(lastGood)}` : '';
     el.innerHTML = `<span class="stale">⚠ Can't load shop data${since}</span>`;
     showNotice(`Can't load shop data: ${e.message}`);
@@ -485,7 +523,7 @@ function setWho() {
 async function signOut() {
   stopPolling();
   try { await pca.logoutRedirect({ account, onRedirectNavigate: () => false }); } catch (e) { /* cache is cleared either way */ }
-  account = null; fileRef = null;
+  account = null; fileRef = null; lastTag = null; lastJobs = null;
   ['safety', 'ongoing', 'upcoming'].forEach(id => { delete reels[id]; document.getElementById('l-' + id).innerHTML = ''; document.getElementById('c-' + id).textContent = '0'; });
   document.getElementById('who').textContent = '';
   document.getElementById('updated').textContent = 'Signed out';
