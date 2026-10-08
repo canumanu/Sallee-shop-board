@@ -191,10 +191,16 @@ function today() { const d = new Date(); return new Date(d.getFullYear(), d.getM
 function dayDiff(a, b) { return Math.round((a - b) / 86400000); }
 function fmtDay(d) { return d ? d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : ''; }
 
+// Which column a row goes in:
+//  1. TYPE is a safety inspection (SAFETY / SAFETY INSPECTION / INSPECTION / ROUTINE)  -> Safety Inspections
+//  2. STATUS is IN PROGRESS (or TYPE is ONGOING)                                        -> In the Shop
+//     (a job marked DONE stays in In the Shop, dimmed, for the day it was completed)
+//  3. Anything else - PLANNED, UNPLANNED, SCHEDULED, blank...                           -> Scheduled
 function kind(job) {
-  const t = up(job.type);
-  if (t.startsWith('SAFE') || t.startsWith('INSP') || t.startsWith('ROUT')) return 'safety';  // ROUTINE counts as a safety inspection
-  if (t.startsWith('ONG') || t.includes('PROGRESS') || t === 'ACTIVE') return 'ongoing';
+  const t = up(job.type), s = up(job.status);
+  if (t.startsWith('SAFE') || t.startsWith('INSP') || t.startsWith('ROUT')) return 'safety';
+  if (/PROGRESS|WORKING|STARTED/.test(s) || t.startsWith('ONG')) return 'ongoing';
+  if (/DONE|COMPLETE|CLOSED/.test(s)) return 'ongoing';   // finished jobs: shown only on the day they were completed
   return 'upcoming';
 }
 
